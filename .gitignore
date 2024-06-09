@@ -1,0 +1,7 @@
+build/
+sdkconfig
+sdkconfig.old
+new
+new_key
+new_key.pub
+new.pub
