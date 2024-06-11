@@ -1,3 +1,7 @@
+#ifndef _DRIVE_OTA_H_
+
+#define _DRIVE_OTA_H_
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -11,6 +15,21 @@
 #include "driver/gpio.h"
 
 #define IMAGE_VERSION_SIZE              50
+
+ESP_EVENT_DECLARE_BASE(OTA_EVENTS);
+
+enum
+{
+    OTA_EVENT_GET_VERSION_FAIL,
+    OTA_EVENT_NEW_VERSION,
+    OTA_EVENT_OLD_VERSION,
+    OTA_EVENT_FLASH_FIRMWARE,
+    OTA_EVENT_FLASH_FIRMWARE_FAIL,
+    OTA_EVENT_FLASH_FIRMWARE_SUCCESS,
+    OTA_EVENT_GET_FIRMWARE_FAIL,
+    OTA_EVENT_CONNECT_WIFI_FAIL,
+};
+
 
 typedef struct Date_t {
     uint8_t date;
@@ -66,6 +85,8 @@ typedef struct {
     uint8_t *BootPin;
     uint8_t *RstPin;
     uint8_t uart_num;
+    EventGroupHandle_t ButtonEventGr;
+    EventBits_t EventBits;
     char response_buffer[MAX_HTTP_OUTPUT_BUFFER + 1];
 } drive_ota_handle_t;
 
@@ -76,5 +97,8 @@ esp_err_t drive_ota_update_image_version(drive_ota_handle_t *,image_version_t *)
 esp_err_t drive_ota_flash_image(drive_ota_handle_t *);
 esp_err_t drive_ota_get_new_image_version(drive_ota_handle_t *,image_version_t*);
 void drive_ota_set_reject_version(drive_ota_handle_t *,image_version_t *);
+void drive_ota_start(drive_ota_handle_t *,esp_event_handler_t);
 // void drive_ota_start(drive_ota_handle_t*);
 // esp_err_t drive_ota_update_image(drive_ota_handle_t *, ota_image_handle_t *);
+
+#endif

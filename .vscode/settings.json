@@ -36,7 +36,8 @@
     "esp_wifi.h": "c",
     "esp_event_base.h": "c",
     "esp_timer.h": "c",
-    "esp_systick_etm.h": "c"
+    "esp_systick_etm.h": "c",
+    "thread": "c"
   },
   "idf.portWin": "COM8",
   "idf.flashType": "UART"

@@ -32,21 +32,9 @@
 #define TAG "ESP-OTA"
 
 EventGroupHandle_t ButtonEventGr;
-drive_ota_handle_t drive_ota = {};
-ESP_EVENT_DECLARE_BASE(OTA_EVENTS);
-ESP_EVENT_DEFINE_BASE(OTA_EVENTS);
 
-enum
-{
-    OTA_EVENT_GET_VERSION_FAIL,
-    OTA_EVENT_NEW_VERSION,
-    OTA_EVENT_OLD_VERSION,
-    OTA_EVENT_FLASH_FIRMWARE,
-    OTA_EVENT_FLASH_FIRMWARE_FAIL,
-    OTA_EVENT_FLASH_FIRMWARE_SUCCESS,
-    OTA_EVENT_GET_FIRMWARE_FAIL,
-    OTA_EVENT_CONNECT_WIFI_FAIL,
-};
+ESP_EVENT_DEFINE_BASE(OTA_EVENTS);
+drive_ota_handle_t drive_ota = {};
 
 extern const uint8_t server_cert_pem_start[] asm("_binary_google_cer_start");
 extern const uint8_t server_cert_pem_end[] asm("_binary_google_cer_end");
@@ -66,16 +54,16 @@ void ota_event_loop_handler(void *event_handler_arg, esp_event_base_t event_base
         /* code */
         ESP_LOGI(TAG, "New version event");
         drive_version = (image_version_t *)event_data;
-        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\n,Update?", drive_ota.current_version.major_version, drive_ota.current_version.minor_version,drive_ota.reject_version.major_version,drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
+        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\n,Update?", drive_ota.current_version.major_version, drive_ota.current_version.minor_version, drive_ota.reject_version.major_version, drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
         task_ssd1306_display_clear();
         task_ssd1306_display_text(display_buffer);
-        rtc_gpio_set_level(GPIO_NUM_2,1);
+        rtc_gpio_set_level(GPIO_NUM_2, 1);
         break;
     case OTA_EVENT_OLD_VERSION:
         /* code */
         ESP_LOGI(TAG, "Old version event");
         drive_version = (image_version_t *)event_data;
-        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\n", drive_ota.current_version.major_version, drive_ota.current_version.minor_version,drive_ota.reject_version.major_version,drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
+        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\n", drive_ota.current_version.major_version, drive_ota.current_version.minor_version, drive_ota.reject_version.major_version, drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
         task_ssd1306_display_clear();
         task_ssd1306_display_text(display_buffer);
         break;
@@ -175,7 +163,7 @@ void app_main(void)
     // SemaphoreHandle_t Semaphr;
     // Semaphr = xSemaphoreCreateBinary();
     ButtonEventGr = xEventGroupCreate();
-    EventBits_t ButtonEventBits;
+    // EventBits_t ButtonEventBits;
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     gpio_intr_init(ACCEPT_BTN, GPIO_INTR_NEGEDGE, gpio_intr_handler);
     gpio_intr_init(REJECT_BTN, GPIO_INTR_NEGEDGE, gpio_intr_handler);
@@ -189,10 +177,11 @@ void app_main(void)
     rtc_gpio_pulldown_dis(GPIO_NUM_0);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0);
     rtc_gpio_init(GPIO_NUM_2);
-    rtc_gpio_set_direction(GPIO_NUM_2,GPIO_MODE_OUTPUT);
-    rtc_gpio_set_level(GPIO_NUM_2,0);
+    rtc_gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
+    rtc_gpio_set_level(GPIO_NUM_2, 0);
     // esp_deep_sleep_start();
     // drive_ota.url = DRIVE_URL;
+    drive_ota.ButtonEventGr = ButtonEventGr;
     memcpy(drive_ota.url, DRIVE_URL, sizeof(DRIVE_URL));
     drive_ota.cert_pem = (char *)server_cert_pem_start;
     drive_ota.timeout_ms = 3000;
@@ -214,106 +203,101 @@ void app_main(void)
     *(drive_ota.RstPin) = RST_PIN;
     esp_netif_create_default_wifi_sta();
     err = wifi_init_sta(drive_ota.wifi.ssid, drive_ota.wifi.password);
-    esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
-    ESP_LOGI(TAG, "Wake up cause: %d", wakeup_cause);
-    image_version_t drive_version = {0};
-    drive_ota_init(&drive_ota);
-    uart_init(drive_ota.uart_num);
-    while (1)
+    if (err != ESP_OK)
     {
-
-        if (err == ESP_FAIL)
-        {
-            esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_CONNECT_WIFI_FAIL, &drive_ota.wifi, sizeof(drive_ota.wifi), portMAX_DELAY);
-            break;
-        }
-        err = drive_ota_get_new_image_version(&drive_ota, &drive_version);
-        if (err != ESP_OK)
-        {
-            ESP_LOGI(TAG, "Failed to get version!");
-            esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_GET_FIRMWARE_FAIL, NULL, 0, portMAX_DELAY);
-            vTaskDelay(60000 / portTICK_PERIOD_MS);
-            break;
-        }
-        printf("Reject version: %hhd.%hhd\r\n",drive_ota.reject_version.major_version,drive_ota.reject_version.minor_version);
-        err = validate_image_version(&drive_ota, &drive_version);
-        if (err != ESP_OK)
-        {
-            ESP_LOGI(TAG, "Old or rejected version!");
-            esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_OLD_VERSION, &drive_version, sizeof(drive_version), portMAX_DELAY);
-            if (wakeup_cause != ESP_SLEEP_WAKEUP_EXT0)
-            {
-                // skip version
-                ESP_LOGI(TAG, "Skip old version: %d.%d", drive_version.major_version, drive_version.minor_version);
-                break;
-            }
-            // xEventGroupClearBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT);
-            // ButtonEventBits = xEventGroupWaitBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT, pdFALSE, pdFALSE, 60000 / portTICK_PERIOD_MS);
-            // if ((ButtonEventBits & REJECT_BIT) || !(ButtonEventBits & ACCEPT_BIT))
-            // {
-            //     // skip version
-            //     ESP_LOGI(TAG,"Skip version: %d.%d",drive_version.major_version,drive_version.minor_version);
-            //     break;
-
-            // }
-            // ESP_LOGI(TAG,"Accept version: %d.%d",drive_version.major_version,drive_version.minor_version);
-        }
-        // if (err != ESP_OK)
-        // {
-        //     ESP_LOGE(TAG, "Failed to write version");
-        // }
-        esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_NEW_VERSION, &drive_version, sizeof(drive_version), portMAX_DELAY);
-        xEventGroupClearBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT);
-        ButtonEventBits = xEventGroupWaitBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT, pdFALSE, pdFALSE, 60000 / portTICK_PERIOD_MS);
-        if (ButtonEventBits & REJECT_BIT)
-        {
-            printf("Reject version\r\n");
-            drive_ota_set_reject_version(&drive_ota, &drive_version);
-            task_ssd1306_display_clear();
-            break;
-        }
-        else if (!(ButtonEventBits & ACCEPT_BIT))
-        {
-            // notify new version available
-            rtc_gpio_set_level(2,0);
-            break;
-        }
-
-        // ESP_ERROR_CHECK(drive_ota_update_image_version(&drive_ota, &drive_version));
-        err = drive_ota_get_new_image(&drive_ota, &drive_version);
-        if (err != ESP_OK)
-        {
-            // ESP_LOGE(TAG,"Failed to get new image");
-            esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_GET_FIRMWARE_FAIL, &drive_ota.download_link, sizeof(drive_ota.download_link), portMAX_DELAY);
-            break;
-        }
-        esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
-        for (int i = 0; i < MAX_FLASH_RETRIES; i++)
-        {
-            // int64_t start_time_ms = esp_timer_get_time()/1000UL;
-            err = drive_ota_flash_image(&drive_ota);
-            // int64_t complete_time_ms = esp_timer_get_time()/1000UL - start_time_ms;
-            if (err == ESP_OK)
-            {
-                break;
-                // ESP_LOGI(TAG,"Flash image success: %lldms",complete_time_ms);
-            }
-            // else ESP_LOGE(TAG,"Flash image failed: %lldms",complete_time_ms);
-            // vTaskDelay(500/portTICK_PERIOD_MS);
-        }
-        if (err != ESP_OK)
-        {
-            esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE_FAIL, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
-            vTaskDelay(60000 / portTICK_PERIOD_MS);
-            break;
-        }
-        rtc_gpio_set_level(2,0);
-        esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE_SUCCESS, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
-        vTaskDelay(5000/portTICK_PERIOD_MS);
+        char display_buffer[80] = "";
         task_ssd1306_display_clear();
-        break;
+        sprintf(display_buffer, "Please check wifi info\nSSID:%s\nPass:%s", drive_ota.wifi.ssid, drive_ota.wifi.password);
+        task_ssd1306_display_text(display_buffer);
+        ESP_LOGI(TAG, "Sleep");
+        esp_deep_sleep(SLEEP_TIME_S);
     }
-    ESP_LOGI(TAG,"Sleep");
+    drive_ota_init(&drive_ota);
+    drive_ota_start(&drive_ota,&ota_event_loop_handler);
+    // esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+    // ESP_LOGI(TAG, "Wake up cause: %d", wakeup_cause);
+    // image_version_t drive_version = {0};
+    // uart_init(drive_ota.uart_num);
+    // while (1)
+    // {
+
+    //     if (err == ESP_FAIL)
+    //     {
+    //         esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_CONNECT_WIFI_FAIL, &drive_ota.wifi, sizeof(drive_ota.wifi), portMAX_DELAY);
+    //         break;
+    //     }
+    //     err = drive_ota_get_new_image_version(&drive_ota, &drive_version);
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGI(TAG, "Failed to get version!");
+    //         esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_GET_FIRMWARE_FAIL, NULL, 0, portMAX_DELAY);
+    //         vTaskDelay(60000 / portTICK_PERIOD_MS);
+    //         break;
+    //     }
+    //     printf("Reject version: %hhd.%hhd\r\n",drive_ota.reject_version.major_version,drive_ota.reject_version.minor_version);
+    //     err = validate_image_version(&drive_ota, &drive_version);
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGI(TAG, "Old or rejected version!");
+    //         esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_OLD_VERSION, &drive_version, sizeof(drive_version), portMAX_DELAY);
+    //         if (wakeup_cause != ESP_SLEEP_WAKEUP_EXT0)
+    //         {
+    //             // skip version
+    //             ESP_LOGI(TAG, "Skip old version: %d.%d", drive_version.major_version, drive_version.minor_version);
+    //             break;
+    //         }
+    //     }
+    //     esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_NEW_VERSION, &drive_version, sizeof(drive_version), portMAX_DELAY);
+    //     xEventGroupClearBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT);
+    //     ButtonEventBits = xEventGroupWaitBits(ButtonEventGr, ACCEPT_BIT | REJECT_BIT, pdFALSE, pdFALSE, 60000 / portTICK_PERIOD_MS);
+    //     if (ButtonEventBits & REJECT_BIT)
+    //     {
+    //         printf("Reject version\r\n");
+    //         drive_ota_set_reject_version(&drive_ota, &drive_version);
+    //         task_ssd1306_display_clear();
+    //         break;
+    //     }
+    //     else if (!(ButtonEventBits & ACCEPT_BIT))
+    //     {
+    //         // notify new version available
+    //         rtc_gpio_set_level(2,0);
+    //         break;
+    //     }
+
+    //     // ESP_ERROR_CHECK(drive_ota_update_image_version(&drive_ota, &drive_version));
+    //     err = drive_ota_get_new_image(&drive_ota, &drive_version);
+    //     if (err != ESP_OK)
+    //     {
+    //         // ESP_LOGE(TAG,"Failed to get new image");
+    //         esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_GET_FIRMWARE_FAIL, &drive_ota.download_link, sizeof(drive_ota.download_link), portMAX_DELAY);
+    //         break;
+    //     }
+    //     esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
+    //     for (int i = 0; i < MAX_FLASH_RETRIES; i++)
+    //     {
+    //         err = drive_ota_flash_image(&drive_ota);
+    //         // int64_t complete_time_ms = esp_timer_get_time()/1000UL - start_time_ms;
+    //         if (err == ESP_OK)
+    //         {
+    //             break;
+    //             // ESP_LOGI(TAG,"Flash image success: %lldms",complete_time_ms);
+    //         }
+    //         // else ESP_LOGE(TAG,"Flash image failed: %lldms",complete_time_ms);
+    //         // vTaskDelay(500/portTICK_PERIOD_MS);
+    //     }
+    //     if (err != ESP_OK)
+    //     {
+    //         esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE_FAIL, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
+    //         vTaskDelay(60000 / portTICK_PERIOD_MS);
+    //         break;
+    //     }
+    //     rtc_gpio_set_level(2,0);
+    //     esp_event_post_to(ota_loop_handle, OTA_EVENTS, OTA_EVENT_FLASH_FIRMWARE_SUCCESS, &drive_ota, sizeof(drive_ota), portMAX_DELAY);
+    //     vTaskDelay(5000/portTICK_PERIOD_MS);
+    //     task_ssd1306_display_clear();
+    //     break;
+    // }
+    ESP_LOGI(TAG, "Sleep");
     esp_deep_sleep(SLEEP_TIME_S);
 
     // return ESP_OK;
