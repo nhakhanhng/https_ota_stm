@@ -54,7 +54,7 @@ void ota_event_loop_handler(void *event_handler_arg, esp_event_base_t event_base
         /* code */
         ESP_LOGI(TAG, "New version event");
         drive_version = (image_version_t *)event_data;
-        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\n,Update?", drive_ota.current_version.major_version, drive_ota.current_version.minor_version, drive_ota.reject_version.major_version, drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
+        sprintf(display_buffer, "Current:%d.%d\nReject:%d.%d\nDrive:%d.%d\nUpdate?", drive_ota.current_version.major_version, drive_ota.current_version.minor_version, drive_ota.reject_version.major_version, drive_ota.reject_version.minor_version, drive_version->major_version, drive_version->minor_version);
         task_ssd1306_display_clear();
         task_ssd1306_display_text(display_buffer);
         rtc_gpio_set_level(GPIO_NUM_2, 1);
@@ -153,13 +153,13 @@ void app_main(void)
 
     // ESP_ERROR_CHECK(example_connect());
     // esp_sleep_enable_timer_wakeup()
-    esp_event_loop_args_t ota_loop_args = {
-        .queue_size = 5,
-        .task_name = "ota_loop_task",
-        .task_priority = uxTaskPriorityGet(NULL),
-        .task_stack_size = 3072,
-        .task_core_id = tskNO_AFFINITY,
-    };
+    // esp_event_loop_args_t ota_loop_args = {
+    //     .queue_size = 5,
+    //     .task_name = "ota_loop_task",
+    //     .task_priority = uxTaskPriorityGet(NULL),
+    //     .task_stack_size = 3072,
+    //     .task_core_id = tskNO_AFFINITY,
+    // };
     // SemaphoreHandle_t Semaphr;
     // Semaphr = xSemaphoreCreateBinary();
     ButtonEventGr = xEventGroupCreate();
@@ -168,9 +168,9 @@ void app_main(void)
     gpio_intr_init(ACCEPT_BTN, GPIO_INTR_NEGEDGE, gpio_intr_handler);
     gpio_intr_init(REJECT_BTN, GPIO_INTR_NEGEDGE, gpio_intr_handler);
     // xSemaphoreTake(Semaphr,portMAX_DELAY);
-    esp_event_loop_handle_t ota_loop_handle;
-    esp_event_loop_create(&ota_loop_args, &ota_loop_handle);
-    esp_event_handler_instance_register_with(ota_loop_handle, OTA_EVENTS, ESP_EVENT_ANY_ID, &ota_event_loop_handler, NULL, NULL);
+    // esp_event_loop_handle_t ota_loop_handle;
+    // esp_event_loop_create(&ota_loop_args, &ota_loop_handle);
+    // esp_event_handler_instance_register_with(ota_loop_handle, OTA_EVENTS, ESP_EVENT_ANY_ID, &ota_event_loop_handler, NULL, NULL);
 
     rtc_gpio_deinit(GPIO_NUM_0);
     rtc_gpio_pullup_en(GPIO_NUM_0);
